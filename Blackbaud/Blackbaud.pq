@@ -2230,9 +2230,9 @@ ConstituentLayout = (sourceTable as table) as table =>
 
 MembershipHistoryLayout = (sourceTable as table) as table =>
 	let
-		renameId = Table.RenameColumns(sourceTable, {{"id","transaction_id"}}),
+		renameId = Table.RenameColumns(sourceTable, {{"id","transaction_id"}})
 	in
-		renameID:
+		renameId;
 
 ConstituentNoExpansLayout= (sourceTable as table) as table =>
     let
