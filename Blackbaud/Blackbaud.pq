@@ -793,8 +793,8 @@ ConstituentFilteredDocs = type function (
         ],
         [
             Description = "Constituent Code parameter usage",
-            Code = "= #""Constituent (filtered)"".Contents(""Board ,Volunteer"")",
-            Result = "Returns constituents whose active constituent codes include either ""Board "" or ""Volunteer"""
+            Code = "= #""Constituent (filtered)"".Contents(""Board Member,Volunteer"")",
+            Result = "Returns constituents whose active constituent codes include either ""Board Member"" or ""Volunteer"""
         ],
         [
             Description = "Custom Field Category parameter usage",
@@ -1032,7 +1032,7 @@ NotesListType = type table [
     date_modified = nullable datetimezone
 ];
 
-// ship List - https://developer.sky.blackbaud.com/docs/services/56b76470069a0509c8f1c5b3/operations/ListMemberships
+// Membership List - https://developer.sky.blackbaud.com/docs/services/56b76470069a0509c8f1c5b3/operations/ListMemberships
 MembershipListType = type table [
     constituent_id = nullable text,
     id = nullable text,
