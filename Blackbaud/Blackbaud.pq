@@ -739,15 +739,14 @@ ConstituentListType = type table [
 ];
 
 MembershipHistoryListType = type table [
-	id = nullable string,
-	category_name = nullable string,
-	program_name = nullable string,
-	sub_category_name = nullable string,
-	reason = nullable string,
-	membership_comment = nullable string,
+	id = nullable text,
+	category_name = nullable text,
+	program_name = nullable text,
+	sub_category_name = nullable text,
+	reason = nullable text,
+	membership_comment = nullable text,
 	activity_date = FuzzyDateType,
-	MembershipType = nullable string
-	//igtodo: gifts? 
+	MembershipType = nullable text
 ];
 
 shared ConstituentFiltered.Contents = Value.ReplaceType(ConstituentFiltered, ConstituentFilteredDocs);
