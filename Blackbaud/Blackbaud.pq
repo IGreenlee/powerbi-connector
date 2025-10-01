@@ -522,7 +522,7 @@ SchemaTable = #table(
         {"My Private Lists", null, CreateListsNavTable("Constituent", false, ConstituentByList), branchConstituent, null, null, null},
 
 		//Membership
-		{Membership history list, MembershipHistoryListType, urlMemberList & "/#{0}/transactions}, branchMembership, MembershipHistoryLayout, DefaultRecLimit, true},
+		{"Membership history list", MembershipHistoryListType, urlMemberList & "/#{0}/transactions", branchMembership, MembershipHistoryLayout, DefaultRecLimit, true},
 
         // Lists
         {"Constituent Lists", ListOfListsType, "list/v1/lists?list_type=Constituent", branchLists, ListsLayout, 0, true},
