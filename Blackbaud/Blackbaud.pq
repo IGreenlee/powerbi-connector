@@ -484,6 +484,7 @@ GetLimitForEntity = (entity as text) as number => try SchemaTable{[Entity=entity
 GetHasNextLinkForEntity = (entity as text) as logical => try SchemaTable{[Entity=entity]}[HasNextLink] otherwise error "Couldn't find entity: '" & entity &"'";
 
 branchConstituent = "Constituents";
+branchMembership = "Memberships";
 branchLists = "Lists";
 branchFundraising = "Fundraising";
 branchGifts = "Gifts";
@@ -519,6 +520,9 @@ SchemaTable = #table(
         {"Constituent custom field categories", CustomFieldCategoryType, "constituent/v1/constituents/customfields/categories/details ", branchConstituent, null, DefaultRecLimit, true},
         {"Public Lists", null, CreateListsNavTable("Constituent", true, ConstituentByList), branchConstituent, null, null, null},
         {"My Private Lists", null, CreateListsNavTable("Constituent", false, ConstituentByList), branchConstituent, null, null, null},
+
+		//Membership
+		{Membership history list, MembershipHistoryListType, urlMemberList, branchMembership, MembershipHistoryLayout, DefaultRecLimit, true},//igtodo: fill out membership history layout, limits, unsure about HasNextLink.
 
         // Lists
         {"Constituent Lists", ListOfListsType, "list/v1/lists?list_type=Constituent", branchLists, ListsLayout, 0, true},
@@ -699,6 +703,8 @@ CustomFieldCategoryType = type table [
 
 urlConstitApi = "constituent/v1";
 urlConstitList = urlConstitApi & "/constituents";
+urlMemberApi = "membership/v1";
+urlMemberList = urlMemberApi & "/memberships";
 
 ConstituentListType = type table [
     id = nullable text,
@@ -730,6 +736,18 @@ ConstituentListType = type table [
     inactive = nullable logical,
     date_added = nullable datetimezone,
     date_modified = nullable datetimezone
+];
+
+MembershipHistoryListType = type table [
+	id = nullable string,
+	category_name = nullable string,
+	program_name = nullable string,
+	sub_category_name = nullable string,
+	reason = nullable string,
+	membership_comment = nullable string,
+	activity_date = FuzzyDateType,
+	MembershipType = nullable string
+	//igtodo: gifts? 
 ];
 
 shared ConstituentFiltered.Contents = Value.ReplaceType(ConstituentFiltered, ConstituentFilteredDocs);
@@ -775,8 +793,8 @@ ConstituentFilteredDocs = type function (
         ],
         [
             Description = "Constituent Code parameter usage",
-            Code = "= #""Constituent (filtered)"".Contents(""Board Member,Volunteer"")",
-            Result = "Returns constituents whose active constituent codes include either ""Board Member"" or ""Volunteer"""
+            Code = "= #""Constituent (filtered)"".Contents(""Board ,Volunteer"")",
+            Result = "Returns constituents whose active constituent codes include either ""Board "" or ""Volunteer"""
         ],
         [
             Description = "Custom Field Category parameter usage",
@@ -1014,7 +1032,7 @@ NotesListType = type table [
     date_modified = nullable datetimezone
 ];
 
-// Membership List - https://developer.sky.blackbaud.com/docs/services/56b76470069a0509c8f1c5b3/operations/ListMemberships
+// ship List - https://developer.sky.blackbaud.com/docs/services/56b76470069a0509c8f1c5b3/operations/ListMemberships
 MembershipListType = type table [
     constituent_id = nullable text,
     id = nullable text,
@@ -2209,6 +2227,12 @@ ConstituentLayout = (sourceTable as table) as table =>
             renameId = Table.RenameColumns(renameLookup, {{"id", "constituent_id"}})
     in
         renameId;
+
+MembershipHistoryLayout = (sourceTable as table) as table =>
+	let
+		renameId = Table.RenameColumns(sourceTable, {{"id","transaction_id"}}),
+	in
+		renameID:
 
 ConstituentNoExpansLayout= (sourceTable as table) as table =>
     let
