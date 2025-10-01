@@ -374,7 +374,7 @@ GetNavigationTable = () as table =>
 
 GetRENXTNavTableRows = () as list =>
     let
-        branches = {branchConstituent, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
+        branches = {branchConstituent, branchMembership, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
     in
         GetNavTableRows(branches);
 
