@@ -223,6 +223,16 @@ LoadFromResource = (name as text) as text =>
 // ---------------------------------------------------------------
 // Pagination
 // ---------------------------------------------------------------
+SetResponseValueFieldName = (inputRecord as record, responseValueName as text) as record =>
+    let
+	result = if (Record.HasFields(inputRecord, responseValueName))
+		 then Record.RenameFields(
+		      inputRecord, 
+		      {responseValueName, "value"})
+		 else inputRecord
+    in
+	result;
+
 // todo: would like to move these to .pqm files but can't get it to work due to some EoF error
 GetPageByNextLink = (url as text, optional schema as type) as table =>
     let
@@ -240,8 +250,12 @@ GetPageByNextLink = (url as text, optional schema as type) as table =>
                 Table.FromList(body[value], Splitter.SplitByNothing(), {"value"})
             else
                 let
+		    //rename specifically named response values to "value" for consistency
+		    body2 = SetResponseValueFieldName(body, "transactions"),
+		    body3 = SetResponseValueFieldName(body2, "categories"),
                     // convert the list of records into a table (single column of records)
-                    asTable = Table.FromList(body[value], Splitter.SplitByNothing(), {"Column1"}),
+                    //asTable = Table.FromList(body[value], Splitter.SplitByNothing(), {"Column1"}),
+                    asTable = Table.FromList(body3[value], Splitter.SplitByNothing(), {"Column1"}),
                     fields = Record.FieldNames(Type.RecordFields(Type.TableRow(schema))),
                     //expanded = Table.ExpandRecordColumn(asTable, fields)
                     expanded = Table.ExpandRecordColumn(asTable, "Column1",fields)
@@ -374,7 +388,7 @@ GetNavigationTable = () as table =>
 
 GetRENXTNavTableRows = () as list =>
     let
-        branches = {branchConstituent, branchMembership, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
+        branches = {branchCodeTable, branchConstituent, branchMembership, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
     in
         GetNavTableRows(branches);
 
@@ -483,6 +497,7 @@ GetModifierForEntity = (entity as text) as any => try SchemaTable{[Entity=entity
 GetLimitForEntity = (entity as text) as number => try SchemaTable{[Entity=entity]}[Limit] otherwise error "Couldn't find entity: '" & entity &"'";
 GetHasNextLinkForEntity = (entity as text) as logical => try SchemaTable{[Entity=entity]}[HasNextLink] otherwise error "Couldn't find entity: '" & entity &"'";
 
+branchCodeTable = "Code Table";
 branchConstituent = "Constituents";
 branchMembership = "Memberships";
 branchLists = "Lists";
@@ -521,9 +536,6 @@ SchemaTable = #table(
         {"Public Lists", null, CreateListsNavTable("Constituent", true, ConstituentByList), branchConstituent, null, null, null},
         {"My Private Lists", null, CreateListsNavTable("Constituent", false, ConstituentByList), branchConstituent, null, null, null},
 
-		//Membership
-		{"Membership history list", MembershipHistoryListType, urlMemberList & "/#{0}/transactions", branchMembership, MembershipHistoryLayout, DefaultRecLimit, true},
-
         // Lists
         {"Constituent Lists", ListOfListsType, "list/v1/lists?list_type=Constituent", branchLists, ListsLayout, 0, true},
 
@@ -553,6 +565,14 @@ SchemaTable = #table(
 
         // Event
         {"Event", EventListType, "event/v1/eventlist?include_inactive=true", branchEvents, EventLayout, 500, true},
+
+	//Membership
+	{"Membership history list 1", MembershipHistoryListType, urlMemberList & "/52292/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
+	{"Membership history list 2", MembershipHistoryListType, urlMemberList & "/98827/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
+	{"Membership Category", MembershipCategory, "membership/v1/memberships/categories", branchMembership, BasicLayout, DefaultRecLimit, true},
+
+	//Code Table
+	{"Code Table List", CodeTableType, "codetable/v1/codetables?include_inactive=true", branchCodeTable, BasicLayout, DefaultRecLimit, true},
 
         // General Ledger
         {"Account", AccountSearchType, "generalledger/v1/accounts", branchGeneralLedger, AccountLayout, DefaultRecLimit, false},
@@ -736,17 +756,6 @@ ConstituentListType = type table [
     inactive = nullable logical,
     date_added = nullable datetimezone,
     date_modified = nullable datetimezone
-];
-
-MembershipHistoryListType = type table [
-	id = nullable text,
-	category_name = nullable text,
-	program_name = nullable text,
-	sub_category_name = nullable text,
-	reason = nullable text,
-	membership_comment = nullable text,
-	activity_date = FuzzyDateType,
-	MembershipType = nullable text
 ];
 
 shared ConstituentFiltered.Contents = Value.ReplaceType(ConstituentFiltered, ConstituentFilteredDocs);
@@ -1938,6 +1947,70 @@ EventCategoryType = type [
     category_inactive = nullable logical
 ];
 
+// 10. Membership API
+
+// 10.1. Endpoints
+MembershipHistoryListType = type table [
+	id 			                    = nullable text,
+	category_name 		            = nullable text,
+	program_name 		            = nullable text,
+	sub_category_name 	            = nullable text,
+	reason 			                = nullable text,
+	membership_comment 	            = nullable text,
+	activity_date 		            = nullable FuzzyDateType,
+	MembershipType 		            = nullable text,
+	gifts 			                = nullable TransactionGift
+];
+
+TransactionGift = type table [
+	gift_id 			            = nullable text,
+	applied_amount 			        = nullable Double.Type
+];
+
+MembershipCategoryCollection = type table [
+	categories 			            = nullable MembershipCategory,
+	count 				            = nullable Int32.Type,
+	offset 				            = nullable Int32.Type,
+	limit 				            = nullable Int32.Type
+];
+
+MembershipCategory = type table[
+	membership_category_id 		    = nullable Int32.Type,
+	category_name 			        = nullable text,
+	default_expires_date 		    = nullable FuzzyDateType,
+	program_name 			        = nullable text,
+	sequence 			            = nullable Int32.Type,
+	inactive 			            = nullable logical,
+	lifetime_membership 		    = nullable logical,
+	print_renewals 			        = nullable logical,
+	default_expires_days 		    = nullable Int32.Type,
+	new_mem_expires_value 		    = nullable Int32.Type,
+	NewMembershipExpiresInterval 	= nullable text,
+	maximum_members 		        = nullable Int32.Type,
+	benefit_notes 			        = nullable text,
+	MembershipBenefitsSendTo 	    = nullable text,
+	minimum_dues 			        = nullable Double.Type,
+	dues_level 			            = nullable text
+];
+
+// 11. Code Table API
+
+// 11.1 Endpoints
+
+CodeTableType = type table[
+	code_tables_id 		            = nullable text,
+	name 			                = nullable text,
+	user_defined 		            = nullable logical,
+	has_short_description 	        = nullable logical,
+	can_manage 		                = nullable logical,
+	category 		                = nullable text,
+	product_flags 		            = nullable Int32.Type,
+	country_mask 		            = nullable Int32.Type,
+	has_entries 		            = nullable logical,
+	is_field_lookup 	            = nullable logical,
+	supports_cleanup 	            = nullable logical
+];
+
 // ------ End Type Definitions -----
 
 
@@ -2227,11 +2300,39 @@ ConstituentLayout = (sourceTable as table) as table =>
     in
         renameId;
 
-MembershipHistoryLayout = (sourceTable as table) as table =>
+BasicLayout = (sourceTable as table) as table =>
 	let
-		renameId = Table.RenameColumns(sourceTable, {{"id","transaction_id"}})
+		source = sourceTable
 	in
-		renameId;
+		source;
+
+MembershipHistoryCollectionLayout = (sourceTable as table) as table =>
+	let	
+	    expandTransactions = Table.ExpandRecordColumn(sourceTable, "transactions",
+            {
+		"id",
+		"category_name",
+		"program_name",
+		"sub_category_name",
+		"reason",
+		"membership_comment",
+		"activity_date",
+		"MembershipType",
+		"gifts"
+            },
+            {
+		"transactions.id",
+		"transactions.category_name",
+		"transactions.program_name",
+		"transactions.sub_category_name",
+		"transactions.reason",
+		"transactions.membership_comment",
+		"transactions.activity_date",
+		"transactions.MembershipType",
+		"transactions.gifts"
+            })	
+	in
+		expandTransactions;
 
 ConstituentNoExpansLayout= (sourceTable as table) as table =>
     let
