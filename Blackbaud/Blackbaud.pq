@@ -388,7 +388,7 @@ GetNavigationTable = () as table =>
 
 GetRENXTNavTableRows = () as list =>
     let
-        branches = {branchCodeTable, branchConstituent, branchMembership, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
+        branches = {branchQueries, branchCodeTable, branchConstituent, branchMembership, branchGifts, branchFundraising, branchOpportunities, branchLists, branchEvents}
     in
         GetNavTableRows(branches);
 
@@ -497,6 +497,7 @@ GetModifierForEntity = (entity as text) as any => try SchemaTable{[Entity=entity
 GetLimitForEntity = (entity as text) as number => try SchemaTable{[Entity=entity]}[Limit] otherwise error "Couldn't find entity: '" & entity &"'";
 GetHasNextLinkForEntity = (entity as text) as logical => try SchemaTable{[Entity=entity]}[HasNextLink] otherwise error "Couldn't find entity: '" & entity &"'";
 
+branchQueries = "Queries";
 branchCodeTable = "Code Table";
 branchConstituent = "Constituents";
 branchMembership = "Memberships";
@@ -511,6 +512,9 @@ branchEvents = "Events";
 SchemaTable = #table(
     {"Entity", "Type", "Endpoint", "Branch", "Function", "Limit", "HasNextLink"}, 
     {
+        //Query
+        {"Queries", QueryType, GetQueryByID.Contents, branchQueries, BasicLayout, DefaultRecLimit, true},
+
         // Constituent
         {"Constituent (all)", ConstituentListType, urlConstitList & "?include_inactive=true&include_deceased=true", branchConstituent, ConstituentLayout, DefaultRecLimit, true},
         {"Constituent (all, no expansions)", ConstituentListType, urlConstitList & "?include_inactive=true&include_deceased=true", branchConstituent, ConstituentNoExpansLayout, DefaultRecLimit, true},
@@ -566,13 +570,13 @@ SchemaTable = #table(
         // Event
         {"Event", EventListType, "event/v1/eventlist?include_inactive=true", branchEvents, EventLayout, 500, true},
 
-	//Membership
-	{"Membership history list 1", MembershipHistoryListType, urlMemberList & "/52292/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
-	{"Membership history list 2", MembershipHistoryListType, urlMemberList & "/98827/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
-	{"Membership Category", MembershipCategory, "membership/v1/memberships/categories", branchMembership, BasicLayout, DefaultRecLimit, true},
+        //Membership
+        {"Membership history list 1", MembershipHistoryListType, urlMemberList & "/52292/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
+        {"Membership history list 2", MembershipHistoryListType, urlMemberList & "/98827/transactions", branchMembership, BasicLayout, DefaultRecLimit, true},
+        {"Membership Category", MembershipCategory, "membership/v1/memberships/categories", branchMembership, BasicLayout, DefaultRecLimit, true},
 
-	//Code Table
-	{"Code Table List", CodeTableType, "codetable/v1/codetables?include_inactive=true", branchCodeTable, BasicLayout, DefaultRecLimit, true},
+	    //Code Table
+	    {"Code Table List", CodeTableType, "codetable/v1/codetables?include_inactive=true", branchCodeTable, BasicLayout, DefaultRecLimit, true},
 
         // General Ledger
         {"Account", AccountSearchType, "generalledger/v1/accounts", branchGeneralLedger, AccountLayout, DefaultRecLimit, false},
@@ -862,6 +866,74 @@ ConstituentFiltered = (optional constituentCode as text, optional customFieldCat
         data = Blackbaud.Feed(urlCustomField, true, ConstituentListType, limit),
         appliedSchema = Table.ChangeType(data, ConstituentListType),
         result = ConstituentLayout(appliedSchema)
+    in
+        result;
+
+ExecuteQueryJobByID = (queryID as number) =>
+    let
+        body =
+            Json.FromValue(
+                [
+                    id = queryID,
+                    ux_mode = "Synchronous",
+                    output_format = "Json",
+                    sql_generation_mode = "Query",
+                    display_code_table_long_description = true
+                    //time_zone_offset_in_minutes = //TODO: use parameter?
+                ]
+            ),
+        url = "https://api.sky.blackbaud.com/query/queries/executebyid?product=RE&module=None", 
+        executeJob = Web.Contents(url, [Content = body, Headers = DefaultRequestHeaders]),
+        executeContent = Json.Document(executeJob),
+        result = executeContent
+    in 
+        result;
+
+QueryExecutionJobStatus = (jobID as text) =>
+    let
+        url = "https://api.sky.blackbaud.com/query/jobs/" & jobID & "?product=RE&module=None&include_read_url=OnceRunning", 
+        jobStatus = Web.Contents(url, [Headers = DefaultRequestHeaders]),
+        jobStatusContent = Json.Document(jobStatus),
+        result = jobStatusContent
+    in 
+        result;
+
+GetQuerySasUri = (queryID as number) => 
+    let
+    job = ExecuteQueryJobByID(queryID),
+    GetStatus =    
+        let
+            jobStatus = QueryExecutionJobStatus(job[id]),
+            result = (row as record) =>
+            Function.InvokeAfter(
+                () =>
+                if row[ExecutionJobStatus][status] <> null 
+                and List.Contains({"Completed", "Failed", "Cancelled"},row[ExecutionJobStatus][status])
+                then [lastIteration = true]
+                else 
+                    [
+                        ExecutionJobStatus = jobStatus, 
+                        lastIteration = false
+                    ], 
+                #duration(0,0,0,5)//wait 5 seconds between status calls
+            )
+        in
+            result,
+    loop = 
+        List.Generate(
+            () => GetStatus( [ExecutionJobStatus = [status = null]] ),
+            each _[lastIteration] = false,
+            each GetStatus( _ ),
+            each _
+        ),
+    result = List.Last(loop)[ExecutionJobStatus][sas_uri],
+    in
+        result;
+
+GetQueryByID = (queryID as text) as table =>
+    let
+        sas_uri = GetQuerySasUri(queryID),
+        result = Table.FromRecords(Json.Document(Web.Contents(resultsUri))),
     in
         result;
 
@@ -2010,6 +2082,16 @@ CodeTableType = type table[
 	is_field_lookup 	            = nullable logical,
 	supports_cleanup 	            = nullable logical
 ];
+
+// 12. Query API
+
+// 12.1 Endpoints
+
+QueryType = type table[
+    //select_fields
+    //filter_fields
+
+]/
 
 // ------ End Type Definitions -----
 
