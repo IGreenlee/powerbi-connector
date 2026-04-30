@@ -900,40 +900,40 @@ QueryExecutionJobStatus = (jobID as text) =>
 
 GetQuerySasUri = (queryID as number) => 
     let
-    job = ExecuteQueryJobByID(queryID),
-    GetStatus =    
-        let
-            jobStatus = QueryExecutionJobStatus(job[id]),
-            result = (row as record) =>
-            Function.InvokeAfter(
-                () =>
-                if row[ExecutionJobStatus][status] <> null 
-                and List.Contains({"Completed", "Failed", "Cancelled"},row[ExecutionJobStatus][status])
-                then [lastIteration = true]
-                else 
-                    [
-                        ExecutionJobStatus = jobStatus, 
-                        lastIteration = false
-                    ], 
-                #duration(0,0,0,5)//wait 5 seconds between status calls
-            )
-        in
-            result,
-    loop = 
-        List.Generate(
-            () => GetStatus( [ExecutionJobStatus = [status = null]] ),
-            each _[lastIteration] = false,
-            each GetStatus( _ ),
-            each _
-        ),
-    result = List.Last(loop)[ExecutionJobStatus][sas_uri],
+        job = ExecuteQueryJobByID(queryID),
+        GetStatus =    
+            let
+                jobStatus = QueryExecutionJobStatus(job[id]),
+                result = (row as record) =>
+                Function.InvokeAfter(
+                    () =>
+                    if row[ExecutionJobStatus][status] <> null 
+                    and List.Contains({"Completed", "Failed", "Cancelled"},row[ExecutionJobStatus][status])
+                    then [lastIteration = true]
+                    else 
+                        [
+                            ExecutionJobStatus = jobStatus, 
+                            lastIteration = false
+                        ], 
+                    #duration(0,0,0,5)//wait 5 seconds between status calls
+                )
+            in
+                result,
+        loop = 
+            List.Generate(
+                () => GetStatus( [ExecutionJobStatus = [status = null]] ),
+                each _[lastIteration] = false,
+                each GetStatus( _ ),
+                each _
+            ),
+        result = List.Last(loop)[ExecutionJobStatus][sas_uri]
     in
         result;
 
 GetQueryByID = (queryID as text) as table =>
     let
         sas_uri = GetQuerySasUri(queryID),
-        result = Table.FromRecords(Json.Document(Web.Contents(resultsUri))),
+        result = Table.FromRecords(Json.Document(Web.Contents(resultsUri)))
     in
         result;
 
@@ -2090,8 +2090,7 @@ CodeTableType = type table[
 QueryType = type table[
     //select_fields
     //filter_fields
-
-]/
+];
 
 // ------ End Type Definitions -----
 
