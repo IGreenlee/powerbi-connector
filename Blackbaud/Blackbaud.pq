@@ -869,7 +869,7 @@ ConstituentFiltered = (optional constituentCode as text, optional customFieldCat
     in
         result;
 
-ExecuteQueryJobByID = (queryID as number) =>
+ExecuteQueryJobByID = (queryID as number) as Json =>
     let
         body =
             Json.FromValue(
@@ -889,7 +889,7 @@ ExecuteQueryJobByID = (queryID as number) =>
     in 
         result;
 
-QueryExecutionJobStatus = (jobID as text) =>
+QueryExecutionJobStatus = (jobID as text) as record =>
     let
         url = "https://api.sky.blackbaud.com/query/jobs/" & jobID & "?product=RE&module=None&include_read_url=OnceRunning", 
         jobStatus = Web.Contents(url, [Headers = DefaultRequestHeaders]),
@@ -898,7 +898,7 @@ QueryExecutionJobStatus = (jobID as text) =>
     in 
         result;
 
-GetQuerySasUri = (queryID as number) => 
+GetQuerySasUri = (queryID as number) as text => 
     let
         job = ExecuteQueryJobByID(queryID),
         GetStatus =    
