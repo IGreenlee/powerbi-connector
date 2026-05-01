@@ -2083,15 +2083,6 @@ CodeTableType = type table[
 	supports_cleanup 	            = nullable logical
 ];
 
-// 12. Query API
-
-// 12.1 Endpoints
-
-QueryType = type table[
-    //select_fields
-    //filter_fields
-];
-
 // ------ End Type Definitions -----
 
 
