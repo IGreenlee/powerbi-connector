@@ -513,7 +513,7 @@ SchemaTable = #table(
     {"Entity", "Type", "Endpoint", "Branch", "Function", "Limit", "HasNextLink"}, 
     {
         //Query
-        {"Queries", QueryType, GetQueryByID.Contents, branchQueries, BasicLayout, DefaultRecLimit, true},
+        {"Queries", QueryType, "query", GetQueryByID, branchQueries, BasicLayout, DefaultRecLimit, true},
 
         // Constituent
         {"Constituent (all)", ConstituentListType, urlConstitList & "?include_inactive=true&include_deceased=true", branchConstituent, ConstituentLayout, DefaultRecLimit, true},
@@ -869,7 +869,7 @@ ConstituentFiltered = (optional constituentCode as text, optional customFieldCat
     in
         result;
 
-ExecuteQueryJobByID = (queryID as number) as Json =>
+ExecuteQueryJobByID = (queryID as number) as text =>
     let
         body =
             Json.FromValue(
