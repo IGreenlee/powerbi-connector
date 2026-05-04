@@ -903,12 +903,10 @@ QueryExecutionJobStatus = (jobID as text) as record =>
 
 GetStatus = (row as record, jobId as text) as record =>
     let
-        targetTime = DateTimeZone.UtcNow() + #duration(0,0,0,60),//TODO - remove - debug only.
         status =
         Function.InvokeAfter(
             () =>
-            if DateTimeZone.UtcNow() > targetTime then [lastIteration = true]
-            else if row[ExecutionJobStatus][status] <> null 
+            if row[ExecutionJobStatus][status] <> null 
             and List.Contains({"Completed","Failed","Cancelled"}, row[ExecutionJobStatus][status])
             then [lastIteration = true]
             else 
@@ -926,7 +924,6 @@ GetStatus = (row as record, jobId as text) as record =>
 GetQuerySasUri = (queryID as number) as text => 
     let
         job = ExecuteQueryJobByID(queryID),
-        targetTime = DateTimeZone.UtcNow() + #duration(0,0,0,60),
         loop = 
             List.Generate(
                 () => GetStatus( [ExecutionJobStatus = [status = null]], job[id]),
