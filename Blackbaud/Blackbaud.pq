@@ -513,7 +513,8 @@ SchemaTable = #table(
     {"Entity", "Type", "Endpoint", "Branch", "Function", "Limit", "HasNextLink"}, 
     {
         //Query
-        {"Query Results by ID", QueryType, GetQueryByID, branchQueries, BasicLayout, DefaultRecLimit, true},
+        {"Query Results by ID", QueryType, GetQueryByID, branchQueries, BasicLayout, null, true},
+        {"Query Status Results by ID", QueryType, GetStatusResultsByQueryID, branchQueries, BasicLayout, null, true},
 
         // Constituent
         {"Constituent (all)", ConstituentListType, urlConstitList & "?include_inactive=true&include_deceased=true", branchConstituent, ConstituentLayout, DefaultRecLimit, true},
@@ -882,7 +883,7 @@ ExecuteQueryJobByID = (queryID as number) as record =>
                     //time_zone_offset_in_minutes = //TODO: use parameter?
                 ]
             ),
-        url = "https://api.sky.blackbaud.com/query/queries/executebyid?product=RE&module=None", 
+        url = Uri.Combine(BaseUrl, "/query/queries/executebyid?product=RE&module=None"), 
         headers = Record.Combine({DefaultRequestHeaders, [#"Content-Type"="application/json", #"Cache-Control" = "no-cache"]}),
         executeJob = Web.Contents(url, [Content = body, Headers = headers]),
         executeContent = Json.Document(executeJob),
@@ -890,9 +891,12 @@ ExecuteQueryJobByID = (queryID as number) as record =>
     in 
         result;
 
-QueryExecutionJobStatus = (jobID as text) as record =>
+QueryExecutionJobStatus = (jobId as text) as record =>
     let
-        url = "https://api.sky.blackbaud.com/query/jobs/" & jobID & "?product=RE&module=None&include_read_url=OnceRunning", 
+        rand = Number.Random(),
+        //This function does not work on subsequent calls unless a randomly generated value is appended to the end of the url. 
+        //Otherwise, the results of the first call are returned every time the function is called.
+        url = Uri.Combine(BaseUrl, "/query/jobs/" & jobId & "?product=RE&module=None&include_read_url=OnceRunning" & "&RandomNumber" & Text.From(rand)), 
         headers = Record.Combine({DefaultRequestHeaders, [#"Content-Type"="application/json", #"Cache-Control" = "no-cache"]}),
         jobStatus = Web.Contents(url, [Headers = headers]),
         jobStatusContent = Json.Document(jobStatus),
@@ -900,36 +904,53 @@ QueryExecutionJobStatus = (jobID as text) as record =>
     in 
         result;
 
-
-GetStatus = (row as record, jobId as text) as record =>
+GetStatus = (row as record, jobId as text, maxIterations as number) as record =>
     let
-        status =
-        Function.InvokeAfter(
-            () =>
-            if row[ExecutionJobStatus][status] <> null 
-            and List.Contains({"Completed","Failed","Cancelled"}, row[ExecutionJobStatus][status])
+        result =
+            if  (row[ExecutionJobStatus][status] <> null 
+                and List.Contains({"Completed","Failed","Cancelled"}, row[ExecutionJobStatus][status]))
+                or row[i] = maxIterations //test
             then [lastIteration = true]
             else 
                 [
                     ExecutionJobStatus = QueryExecutionJobStatus(jobId),
+                    iTime = DateTimeZone.UtcNow(),
+                    i = row[i]+1,
                     lastIteration = false
-                ], 
-            #duration(0,0,0,5)//wait 5 seconds between status calls
-        ),
-        result = status
+                ]
     in
         result;
 
+GetStatusResultsByQueryID = (queryID as number, maxIterations as number, waitSeconds as number) as table =>
+    let
+        jobId = ExecuteQueryJobByID(queryID)[id],
+        loop = 
+            List.Generate(
+                () => GetStatus( 
+                    [
+                        ExecutionJobStatus = [status = null], 
+                        iTime = DateTimeZone.UtcNow(),
+                        i = 0, 
+                        lastIteration = false
+                    ], 
+                    jobId,
+                    maxIterations),
+                each _[lastIteration] = false,
+                each Function.InvokeAfter(() => GetStatus(_, jobId, maxIterations), #duration(0,0,0,waitSeconds))
+            ),
+        outTable = Table.FromRecords(loop,{"ExecutionJobStatus","i","iTime"}),
+        result = Table.ExpandRecordColumn(outTable,"ExecutionJobStatus", {"id","status","sas_uri","row_count"})
+    in
+        result;
 
 GetQuerySasUri = (queryID as number) as text => 
     let
-        job = ExecuteQueryJobByID(queryID),
+        jobId = ExecuteQueryJobByID(queryID)[id],
         loop = 
             List.Generate(
-                () => GetStatus( [ExecutionJobStatus = [status = null]], job[id]),
+                () => GetStatus( [ExecutionJobStatus = [status = null], i = 0], jobId, 10000),
                 each _[lastIteration] = false,
-                each GetStatus(_, job[id] ),
-                each _
+                each Function.InvokeAfter(() => GetStatus(_, jobId, 10000), #duration(0,0,0,5))
             ),
         result = List.Last(loop)[ExecutionJobStatus][sas_uri]
     in
